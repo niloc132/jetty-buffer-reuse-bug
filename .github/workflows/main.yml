@@ -17,8 +17,8 @@ jobs:
         run: mvn -B -ntp -U -e install
       - name: Run server and client together
         run: |
-            mvn -B -ntp -U -e -pl :jetty12-ee10 exec:java & \
-            sleep 5 \
-            mvn -B -ntp -U -e -pl :client exec:java \
-            sleep 5 \
-            kill %1
+            mvn -B -ntp -U -e -pl :jetty12-ee10 exec:java &; \
+            sleep 5; \
+            mvn -B -ntp -U -e -pl :client exec:java; \
+            sleep 5; \
+            kill %1;
