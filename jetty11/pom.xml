@@ -9,6 +9,9 @@
         <version>1.0-SNAPSHOT</version>
     </parent>
     <artifactId>jetty11</artifactId>
+    <properties>
+        <exec.mainClass>com.example.jetty11.Server</exec.mainClass>
+    </properties>
 
     <dependencyManagement>
         <dependencies>

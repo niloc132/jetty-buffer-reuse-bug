@@ -5,6 +5,7 @@ import org.eclipse.jetty.http.HttpFields;
 import org.eclipse.jetty.http.HttpURI;
 import org.eclipse.jetty.http.HttpVersion;
 import org.eclipse.jetty.http.MetaData;
+import org.eclipse.jetty.http2.ErrorCode;
 import org.eclipse.jetty.http2.api.Session;
 import org.eclipse.jetty.http2.api.Stream;
 import org.eclipse.jetty.http2.api.server.ServerSessionListener;
@@ -20,12 +21,18 @@ import org.slf4j.LoggerFactory;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 
 public class Client {
+    public static final String HOST = "localhost";
+    public static final int PORT = 10000;
     private static final Logger LOG = LoggerFactory.getLogger(Client.class);
 
 
@@ -36,36 +43,42 @@ public class Client {
         HTTP2Client http2Client = new HTTP2Client();
 
         http2Client.start();
+        Instant start = Instant.now();
+        Duration duration = Duration.ofSeconds(30);
+        while (Instant.now().isBefore(start.plus(duration))) {
+            try {
+                // Connect to host.
+                CompletableFuture<Session> sessionPromise = http2Client.connect(new InetSocketAddress(HOST, PORT), new ServerSessionListener() {
+                });
+                // Obtain the client-side Session object.
+                Session session = sessionPromise.get(5, TimeUnit.SECONDS);
 
-        // Connect to host.
-        String host = "localhost";
-        int port = 10000;
-        CompletableFuture<Session> sessionPromise = http2Client.connect(new InetSocketAddress(host, port), new ServerSessionListener() {
-        });
-        // Obtain the client-side Session object.
-        Session session = sessionPromise.get(5, TimeUnit.SECONDS);
+                for (int i = 0; i < 10; i++) {
+                    sendRequest(session).get();
+                }
+            } catch (Exception e) {
+                LOG.error("Error running client", e);
+            }
+        }
+        System.exit(0);
+
+    }
+
+    private static Future<String> sendRequest(Session h2Session) throws ExecutionException, InterruptedException {
+        CompletableFuture<String> result = new CompletableFuture<>();
         // Prepare the HTTP request headers.
         HttpFields.Mutable requestFields = HttpFields.build();
         // Prepare the HTTP request object.
-        MetaData.Request request = new MetaData.Request("GET", HttpURI.from("http://" + host + ":" + port + "/connect"), HttpVersion.HTTP_2, requestFields);
+        MetaData.Request request = new MetaData.Request("GET", HttpURI.from("http://" + HOST + ":" + PORT + "/connect"), HttpVersion.HTTP_2, requestFields);
         // Create the HTTP/ 2 HEADERS frame representing the HTTP request.
         HeadersFrame headersFrame = new HeadersFrame(request, null, false);
         // Prepare the listener to receive the HTTP response frames.
         Stream.Listener responseListener = new Stream.Listener() {
             @Override
-            public void onHeaders(Stream stream, HeadersFrame frame) {
-                System.err.println(frame);
-
-                if (frame.isEndStream()) {
-                    // Under the workaround, this is the last frame, so we can exit.
-                    latch.countDown();
-                }
-            }
-
-            @Override
             public void onFailure(Stream stream, int error, String reason, Throwable failure, Callback callback) {
                 System.err.println(error + " " + reason);
                 failure.printStackTrace();
+                result.completeExceptionally(failure);
             }
 
             @Override
@@ -76,20 +89,16 @@ public class Client {
                     // No data available now, demand to be called back.
                     stream.demand();
                 } else {
-                    // Process the content.
-                    System.out.println(data.frame().getByteBuffer().remaining() + " bytes read");
-                    // Notify that the content has been consumed.
-                    data.release();
-                    if (!data.frame().isEndStream()) {
-                        // Demand to be called back.
-                        stream.demand();
-                    }
+                    // Treat this as the full payload - end the call and signal that the next can start
+                    result.complete(StandardCharsets.UTF_8.decode(data.frame().getByteBuffer()).toString());
+                    stream.reset(new ResetFrame(stream.getId(), ErrorCode.CANCEL_STREAM_ERROR.code), Callback.NOOP);
                 }
             }
 
             @Override
             public void onClosed(Stream stream) {
-                System.err.println("closed");
+//                System.err.println("closed");
+                result.completeExceptionally(new RuntimeException("Stream closed"));
             }
 
             @Override
@@ -97,15 +106,12 @@ public class Client {
                 // Server said goodbye, log how it did so to validate this bug report and workaround
                 System.err.println(frame);
                 callback.succeeded();
-
-                // Under the bug case, this lets the client main exit, after logging the cancel message.
-                // One reasonable fix here would be for this to also log no_error and continue here.
-                latch.countDown();
+                result.completeExceptionally(new RuntimeException("Server reset the stream"));
             }
         };
         // Send the HEADERS frame to create a stream.
-        CompletableFuture<Stream> streamPromise = session.newStream(headersFrame, responseListener);
-        Stream stream = streamPromise.get(5, TimeUnit.SECONDS);
+        CompletableFuture<Stream> streamPromise = h2Session.newStream(headersFrame, responseListener);
+        Stream stream = streamPromise.get();
         // Use the Stream object to send request content, if any, using a DATA frame.
         ByteBuffer content = StandardCharsets.UTF_8.encode("hello");
         DataFrame requestContent = new DataFrame(stream.getId(), content, false);
@@ -114,10 +120,6 @@ public class Client {
         // Ask for data
         stream.demand();
 
-        // Wait for the server to finish talking to us, stop the stream
-        latch.await();
-
-        // Done, stop the HTTP2Client.
-        http2Client.stop();
+        return result;
     }
 }

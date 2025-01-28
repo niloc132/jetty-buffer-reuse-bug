@@ -16,12 +16,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 public class AsyncStreamingServlet extends HttpServlet {
     private static final Logger LOG = LoggerFactory.getLogger(AsyncStreamingServlet.class);
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
 
     @Override
@@ -32,28 +29,26 @@ public class AsyncStreamingServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         AsyncContext asyncCtx = req.startAsync(req, resp);
-        // Note that this will emit a stack trace on the server if the workaround is applied
-//        asyncCtx.setTimeout(10_000);
 
         asyncCtx.addListener(new AsyncListener() {
             @Override
             public void onComplete(AsyncEvent event) throws IOException {
-                LOG.info("onComplete");
+//                LOG.info("onComplete");
             }
 
             @Override
             public void onTimeout(AsyncEvent event) throws IOException {
-                LOG.info("onTimeout");
+//                LOG.info("onTimeout");
             }
 
             @Override
             public void onError(AsyncEvent event) throws IOException {
-                LOG.info("onError");
+//                LOG.info("onError");
             }
 
             @Override
             public void onStartAsync(AsyncEvent event) throws IOException {
-                LOG.info("onStartAsync");
+//                LOG.info("onStartAsync");
             }
         });
 
@@ -61,29 +56,29 @@ public class AsyncStreamingServlet extends HttpServlet {
         outputStream.setWriteListener(new WriteListener() {
             @Override
             public void onWritePossible() {
-                LOG.info("onWritePossible");
+//                LOG.info("onWritePossible");
             }
 
             @Override
             public void onError(Throwable t) {
-                LOG.error("onError", t);
+//                LOG.error("onError write", t);
             }
         });
         ServletInputStream inputStream = req.getInputStream();
         inputStream.setReadListener(new ReadListener() {
             @Override
             public void onDataAvailable() {
-                LOG.info("onDataAvailable");
+//                LOG.info("onDataAvailable");
             }
 
             @Override
             public void onAllDataRead() {
-                LOG.info("onAllDataRead");
+//                LOG.info("onAllDataRead");
             }
 
             @Override
             public void onError(Throwable t) {
-                LOG.error("onError", t);
+//                LOG.error("onError read", t);
             }
         });
         resp.setTrailerFields(() -> Map.of("foo", "1"));
@@ -97,30 +92,5 @@ public class AsyncStreamingServlet extends HttpServlet {
         if (outputStream.isReady()) {
             resp.flushBuffer();
         }
-
-        scheduler.schedule(() -> {
-            try {
-                if (outputStream.isReady()) {
-                    outputStream.print("Goodbye\n");
-                }
-                if (outputStream.isReady()) {
-                    resp.flushBuffer();
-                }
-                // This line causes the "bug", by producing a RST_STREAM(cancel) frame to send to the client
-                asyncCtx.complete();
-                // Workaround: comment out complete() above, and uncommment the following block. To avoid
-                // a stack trace in logs after the close is finished, also remove the timeout above. This
-                // results in an empty DATA frame with endStream=true being sent to the client, but note
-                // that this isn't the only way to achieve correct behavior - the server could also send
-                // RST_STREAM(no_error).
-
-//                if (outputStream.isReady()) {
-//                    outputStream.close();
-//                }
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }, 3, java.util.concurrent.TimeUnit.SECONDS);
     }
 }

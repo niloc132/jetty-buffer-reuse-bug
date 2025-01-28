@@ -1,0 +1,24 @@
+name: build
+on:
+  push:
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup JDK 17
+        id: setup-java-17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Build with maven, install to m2 so we can use servlet
+        run: mvn -B -ntp -U -e install
+      - name: Run server and client together
+        run: |
+            mvn -B -ntp -U -e -pl :jetty12-ee10 exec:java & \
+            sleep 5 \
+            mvn -B -ntp -U -e -pl :client exec:java \
+            sleep 5 \
+            kill %1

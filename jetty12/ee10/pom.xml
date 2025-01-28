@@ -11,6 +11,10 @@
     </parent>
     <artifactId>jetty12-ee10</artifactId>
 
+    <properties>
+        <exec.mainClass>com.example.jetty12.ee10.Server</exec.mainClass>
+    </properties>
+
     <dependencyManagement>
         <dependencies>
             <dependency>

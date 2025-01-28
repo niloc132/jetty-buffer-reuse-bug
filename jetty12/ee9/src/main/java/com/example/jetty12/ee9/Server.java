@@ -3,6 +3,7 @@ package com.example.jetty12.ee9;
 import com.example.servlet.AsyncStreamingServlet;
 import org.eclipse.jetty.ee9.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee9.servlet.ServletHolder;
+import org.eclipse.jetty.http2.RateControl;
 import org.eclipse.jetty.http2.server.HTTP2CServerConnectionFactory;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.HttpConfiguration;
@@ -15,6 +16,7 @@ public class Server {
         HttpConfiguration httpConfiguration = new HttpConfiguration();
 
         HTTP2CServerConnectionFactory factory = new HTTP2CServerConnectionFactory(httpConfiguration);
+        factory.setRateControlFactory(new RateControl.Factory() {});
         ServerConnector sc = new ServerConnector(s, factory);
         sc.setPort(10000);
 
