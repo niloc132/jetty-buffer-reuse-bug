@@ -18,7 +18,14 @@ jobs:
       - name: Run server and client together
         run: |
             mvn -B -ntp -U -e -pl :jetty12-ee10 exec:java & \
+            tcpdump -C 10 -Z root -i any -U -w tcpdump.pcap & \
             sleep 5; \
             mvn -B -ntp -U -e -pl :client exec:java; \
-            sleep 5; \
-            kill %1;
+            sleep 1; \
+            kill %1; \
+            kill %2; \
+            sleep 1;
+      - name: Upload tcpdump
+        uses: actions/upload-artifact@v4
+        with:
+          path: tcpdump.pcap
