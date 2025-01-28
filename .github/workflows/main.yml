@@ -4,6 +4,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        server-impl: ['jetty12-ee10', 'jetty12-ee9', 'jetty11']
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,7 +20,7 @@ jobs:
         run: mvn -B -ntp -U -e install
       - name: Run server and client together
         run: |
-            mvn -B -ntp -U -e -pl :jetty12-ee10 exec:java & \
+            mvn -B -ntp -U -e -pl :${{ matrix.server-impl }} exec:java & \
             tcpdump -C 10 -Z root -i any -U -w tcpdump.pcap & \
             sleep 5; \
             mvn -B -ntp -U -e -pl :client exec:java; \
