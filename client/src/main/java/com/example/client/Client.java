@@ -114,7 +114,7 @@ public class Client {
         Stream stream = streamPromise.get();
         // Use the Stream object to send request content, if any, using a DATA frame.
         ByteBuffer content = StandardCharsets.UTF_8.encode("hello");
-        DataFrame requestContent = new DataFrame(stream.getId(), content, false);
+        DataFrame requestContent = new DataFrame(stream.getId(), content, true);
         stream.data(requestContent, Callback.NOOP);
 
         // Ask for data
