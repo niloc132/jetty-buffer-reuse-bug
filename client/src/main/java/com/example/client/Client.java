@@ -45,13 +45,15 @@ public class Client {
         http2Client.start();
         Instant start = Instant.now();
         Duration duration = Duration.ofSeconds(30);
+
+        // Connect to host.
+        CompletableFuture<Session> sessionPromise = http2Client.connect(new InetSocketAddress(HOST, PORT), new ServerSessionListener() {
+        });
+        // Obtain the client-side Session object.
+        Session session = sessionPromise.get(5, TimeUnit.SECONDS);
+
         while (Instant.now().isBefore(start.plus(duration))) {
             try {
-                // Connect to host.
-                CompletableFuture<Session> sessionPromise = http2Client.connect(new InetSocketAddress(HOST, PORT), new ServerSessionListener() {
-                });
-                // Obtain the client-side Session object.
-                Session session = sessionPromise.get(5, TimeUnit.SECONDS);
 
                 for (int i = 0; i < 10; i++) {
                     sendRequest(session).get();
